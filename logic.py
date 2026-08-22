@@ -71,6 +71,51 @@ def init_db():
         FOREIGN KEY(dish_id) REFERENCES dishes(id) ON DELETE CASCADE
     )""")
 
+    # ---- جداول ترازنامه مالی (فاکتور خرید / فروش + اقلام دستی) ----
+    c.execute("""CREATE TABLE IF NOT EXISTS balance_sheets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sheet_date TEXT NOT NULL,
+        purchase_date TEXT NOT NULL DEFAULT '',
+        sale_date TEXT NOT NULL DEFAULT '',
+        pos1_amount REAL NOT NULL DEFAULT 0,
+        pos2_amount REAL NOT NULL DEFAULT 0,
+        cash_amount REAL NOT NULL DEFAULT 0,
+        card_to_card_amount REAL NOT NULL DEFAULT 0,
+        grand_total REAL NOT NULL DEFAULT 0,
+        partners_amount REAL NOT NULL DEFAULT 0,
+        municipality_amount REAL NOT NULL DEFAULT 0,
+        tax_amount REAL NOT NULL DEFAULT 0,
+        electricity_amount REAL NOT NULL DEFAULT 0,
+        gas_amount REAL NOT NULL DEFAULT 0,
+        water_amount REAL NOT NULL DEFAULT 0,
+        custom_amount REAL NOT NULL DEFAULT 0,
+        balance_amount REAL NOT NULL DEFAULT 0,
+        shortage_amount REAL NOT NULL DEFAULT 0,
+        purchase_total REAL NOT NULL DEFAULT 0,
+        sale_total REAL NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+    )""")
+
+    c.execute("""CREATE TABLE IF NOT EXISTS purchase_invoice_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        balance_sheet_id INTEGER NOT NULL,
+        item_name TEXT NOT NULL,
+        qty REAL NOT NULL,
+        unit_price REAL NOT NULL,
+        total_price REAL NOT NULL,
+        FOREIGN KEY(balance_sheet_id) REFERENCES balance_sheets(id) ON DELETE CASCADE
+    )""")
+
+    c.execute("""CREATE TABLE IF NOT EXISTS sale_invoice_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        balance_sheet_id INTEGER NOT NULL,
+        item_name TEXT NOT NULL,
+        qty REAL NOT NULL,
+        unit_price REAL NOT NULL,
+        total_price REAL NOT NULL,
+        FOREIGN KEY(balance_sheet_id) REFERENCES balance_sheets(id) ON DELETE CASCADE
+    )""")
+
     conn.commit()
     conn.close()
 
@@ -309,3 +354,121 @@ def compute_dish_cost(overhead_pct, profit_pct, pack_cost, is_takeout, ing_costs
     final_price = total_cost * (1 + profit_pct / 100.0)
     profit_amount = final_price - total_cost
     return ing_costs_sum, overhead_amount, packaging, total_cost, profit_amount, final_price
+
+
+# ============================================================ ترازنامه مالی ====
+def save_balance_sheet(sheet_date, purchase_date, sale_date, purchase_items, sale_items,
+                        manual, balance_sheet_id=None):
+    """
+    ذخیره یا ویرایش یک ترازنامه مالی کامل (فاکتور خرید + فاکتور فروش + اقلام دستی).
+
+    purchase_items / sale_items: لیستی از تاپل‌های (نام کالا, وزن/تعداد, قیمت واحد, قیمت کل)
+    manual: دیکشنری شامل کلیدهای:
+        pos1, pos2, cash, card_to_card, grand_total, partners_amount,
+        municipality, tax, electricity, gas, water, custom_amount, balance, shortage
+
+    اگر balance_sheet_id داده شود، همان رکورد ویرایش می‌شود (ردیف‌های فاکتور قبلی حذف و دوباره درج می‌شوند).
+    اگر داده نشود، یک ترازنامه جدید ساخته می‌شود.
+
+    خروجی: شناسه (id) ترازنامه ذخیره‌شده.
+    """
+    conn = get_conn()
+    c = conn.cursor()
+    ts = now_str()
+    purchase_total = sum(row[3] for row in purchase_items)
+    sale_total = sum(row[3] for row in sale_items)
+
+    values = (
+        sheet_date, purchase_date, sale_date,
+        manual.get("pos1", 0), manual.get("pos2", 0), manual.get("cash", 0), manual.get("card_to_card", 0),
+        manual.get("grand_total", 0), manual.get("partners_amount", 0), manual.get("municipality", 0),
+        manual.get("tax", 0), manual.get("electricity", 0), manual.get("gas", 0), manual.get("water", 0),
+        manual.get("custom_amount", 0), manual.get("balance", 0), manual.get("shortage", 0),
+        purchase_total, sale_total,
+    )
+
+    if balance_sheet_id:
+        c.execute("SELECT id FROM balance_sheets WHERE id=?", (balance_sheet_id,))
+        if not c.fetchone():
+            conn.close()
+            raise ValueError("ترازنامه مورد نظر برای ویرایش پیدا نشد.")
+        c.execute("""UPDATE balance_sheets SET
+                     sheet_date=?, purchase_date=?, sale_date=?,
+                     pos1_amount=?, pos2_amount=?, cash_amount=?, card_to_card_amount=?,
+                     grand_total=?, partners_amount=?, municipality_amount=?, tax_amount=?,
+                     electricity_amount=?, gas_amount=?, water_amount=?, custom_amount=?,
+                     balance_amount=?, shortage_amount=?, purchase_total=?, sale_total=?
+                     WHERE id=?""", values + (balance_sheet_id,))
+        c.execute("DELETE FROM purchase_invoice_items WHERE balance_sheet_id=?", (balance_sheet_id,))
+        c.execute("DELETE FROM sale_invoice_items WHERE balance_sheet_id=?", (balance_sheet_id,))
+    else:
+        c.execute("""INSERT INTO balance_sheets (
+                     sheet_date, purchase_date, sale_date,
+                     pos1_amount, pos2_amount, cash_amount, card_to_card_amount,
+                     grand_total, partners_amount, municipality_amount, tax_amount,
+                     electricity_amount, gas_amount, water_amount, custom_amount,
+                     balance_amount, shortage_amount, purchase_total, sale_total, created_at)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", values + (ts,))
+        balance_sheet_id = c.lastrowid
+
+    for name, qty, unit_price, total_price in purchase_items:
+        c.execute("""INSERT INTO purchase_invoice_items
+                     (balance_sheet_id, item_name, qty, unit_price, total_price)
+                     VALUES (?,?,?,?,?)""", (balance_sheet_id, name, qty, unit_price, total_price))
+
+    for name, qty, unit_price, total_price in sale_items:
+        c.execute("""INSERT INTO sale_invoice_items
+                     (balance_sheet_id, item_name, qty, unit_price, total_price)
+                     VALUES (?,?,?,?,?)""", (balance_sheet_id, name, qty, unit_price, total_price))
+
+    conn.commit()
+    conn.close()
+    return balance_sheet_id
+
+
+def get_all_balance_sheets():
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("""SELECT id, sheet_date, purchase_date, sale_date, purchase_total, sale_total,
+                 grand_total, balance_amount, shortage_amount, created_at
+                 FROM balance_sheets ORDER BY id DESC""")
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+
+def get_balance_sheet_full(balance_sheet_id):
+    """
+    خروجی: (header, purchase_items, sale_items)
+    header = (id, sheet_date, purchase_date, sale_date, pos1, pos2, cash, card_to_card,
+              grand_total, partners_amount, municipality, tax, electricity, gas, water,
+              custom_amount, balance, shortage, purchase_total, sale_total, created_at)
+    purchase_items / sale_items = لیستی از (id, item_name, qty, unit_price, total_price)
+    """
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("""SELECT id, sheet_date, purchase_date, sale_date, pos1_amount, pos2_amount,
+                 cash_amount, card_to_card_amount, grand_total, partners_amount, municipality_amount,
+                 tax_amount, electricity_amount, gas_amount, water_amount, custom_amount,
+                 balance_amount, shortage_amount, purchase_total, sale_total, created_at
+                 FROM balance_sheets WHERE id=?""", (balance_sheet_id,))
+    header = c.fetchone()
+
+    c.execute("""SELECT id, item_name, qty, unit_price, total_price
+                 FROM purchase_invoice_items WHERE balance_sheet_id=? ORDER BY id""", (balance_sheet_id,))
+    purchase_items = c.fetchall()
+
+    c.execute("""SELECT id, item_name, qty, unit_price, total_price
+                 FROM sale_invoice_items WHERE balance_sheet_id=? ORDER BY id""", (balance_sheet_id,))
+    sale_items = c.fetchall()
+
+    conn.close()
+    return header, purchase_items, sale_items
+
+
+def delete_balance_sheet(balance_sheet_id):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("DELETE FROM balance_sheets WHERE id=?", (balance_sheet_id,))
+    conn.commit()
+    conn.close()

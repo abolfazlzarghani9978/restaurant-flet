@@ -2,7 +2,7 @@
 """
 سیستم جامع مدیریت مالی، انبارداری، قیمت‌گذاری و پیشنهاد هوشمند قیمت رستوران
 نسخه اندرویدی / دسکتاپ / وب - ساخته‌شده با Flet
-شامل ۶ بخش: ثبت فروش، محاسبه غذا، کالاها و انبار، قیمت‌گذاری هوشمند، گزارش منو، داشبورد
+شامل ۷ بخش: ثبت فروش، محاسبه غذا، کالاها و انبار، قیمت‌گذاری هوشمند، گزارش منو، داشبورد، ترازنامه مالی
 """
 import flet as ft
 import logic
@@ -715,14 +715,508 @@ def main(page: ft.Page):
         return content
 
     # ============================================================
+    # تب ۷: ترازنامه مالی (فاکتور خرید / فروش + اقلام دستی)
+    # ============================================================
+    def build_balance_tab():
+        editing_id = [None]  # وقتی مقدار دارد یعنی در حالت ویرایش یک ترازنامه قبلی هستیم
+
+        # ---- تاریخ کلی ترازنامه ----
+        sheet_date_field = ft.TextField(label="تاریخ کلی ترازنامه (مثلاً 1403/05/12)", width=300)
+
+        # ---- فاکتور خرید ----
+        purchase_date_field = ft.TextField(label="روز و تاریخ فاکتور خرید", width=260)
+        purchase_item_name = ft.TextField(label="نوع کالا", width=200)
+        purchase_qty = ft.TextField(label="وزن/تعداد", width=120, keyboard_type=ft.KeyboardType.NUMBER)
+        purchase_unit_price = ft.TextField(label="قیمت واحد", width=140, keyboard_type=ft.KeyboardType.NUMBER)
+        purchase_rows = []  # هر آیتم: {"name","qty","unit_price","total_price"}
+        editing_purchase_idx = [None]  # اندیس ردیفی از فاکتور خرید که در حال ویرایش است (None یعنی حالت افزودن)
+        purchase_table = ft.DataTable(
+            columns=[
+                ft.DataColumn(ft.Text("نوع کالا")),
+                ft.DataColumn(ft.Text("وزن/تعداد")),
+                ft.DataColumn(ft.Text("قیمت واحد")),
+                ft.DataColumn(ft.Text("قیمت کل")),
+                ft.DataColumn(ft.Text("عملیات")),
+            ],
+            rows=[],
+        )
+        purchase_total_text = ft.Text("جمع فاکتور خرید: 0 تومان", size=14, weight=ft.FontWeight.BOLD, color=ACCENT_DARK)
+
+        # ---- فاکتور فروش ----
+        sale_date_field = ft.TextField(label="روز و تاریخ فاکتور فروش", width=260)
+        sale_item_name = ft.TextField(label="نوع کالا", width=200)
+        sale_qty = ft.TextField(label="وزن/تعداد", width=120, keyboard_type=ft.KeyboardType.NUMBER)
+        sale_unit_price = ft.TextField(label="قیمت واحد", width=140, keyboard_type=ft.KeyboardType.NUMBER)
+        sale_rows = []
+        editing_sale_idx = [None]  # اندیس ردیفی از فاکتور فروش که در حال ویرایش است (None یعنی حالت افزودن)
+        sale_table = ft.DataTable(
+            columns=[
+                ft.DataColumn(ft.Text("نوع کالا")),
+                ft.DataColumn(ft.Text("وزن/تعداد")),
+                ft.DataColumn(ft.Text("قیمت واحد")),
+                ft.DataColumn(ft.Text("قیمت کل")),
+                ft.DataColumn(ft.Text("عملیات")),
+            ],
+            rows=[],
+        )
+        sale_total_text = ft.Text("جمع فاکتور فروش: 0 تومان", size=14, weight=ft.FontWeight.BOLD, color=ACCENT_DARK)
+
+        match_text = ft.Text("", size=13)
+
+        # ---- اقلام دستی ----
+        pos1_field = ft.TextField(label="جمع واریزی کارتخوان ۱", width=260, value="0", keyboard_type=ft.KeyboardType.NUMBER)
+        pos2_field = ft.TextField(label="جمع واریزی کارتخوان ۲", width=260, value="0", keyboard_type=ft.KeyboardType.NUMBER)
+        cash_field = ft.TextField(label="نقدی", width=260, value="0", keyboard_type=ft.KeyboardType.NUMBER)
+        card_to_card_field = ft.TextField(label="کارت به کارت", width=260, value="0", keyboard_type=ft.KeyboardType.NUMBER)
+        grand_total_field = ft.TextField(label="جمع کل", width=260, value="0", keyboard_type=ft.KeyboardType.NUMBER)
+        partners_field = ft.TextField(label="مبلغ پایا شده شرکا", width=260, value="0", keyboard_type=ft.KeyboardType.NUMBER)
+        municipality_field = ft.TextField(label="شهرداری", width=260, value="0", keyboard_type=ft.KeyboardType.NUMBER)
+        tax_field = ft.TextField(label="دارایی", width=260, value="0", keyboard_type=ft.KeyboardType.NUMBER)
+        electricity_field = ft.TextField(label="برق", width=260, value="0", keyboard_type=ft.KeyboardType.NUMBER)
+        gas_field = ft.TextField(label="گاز", width=260, value="0", keyboard_type=ft.KeyboardType.NUMBER)
+        water_field = ft.TextField(label="آب", width=260, value="0", keyboard_type=ft.KeyboardType.NUMBER)
+        custom_field = ft.TextField(label="مبلغ دلخواه", width=260, value="0", keyboard_type=ft.KeyboardType.NUMBER)
+        balance_field = ft.TextField(label="تراز مالی", width=260, value="0", keyboard_type=ft.KeyboardType.NUMBER)
+        shortage_field = ft.TextField(label="کسری اقلام", width=260, value="0", keyboard_type=ft.KeyboardType.NUMBER)
+
+        status_text = ft.Text("", size=13)
+
+        # ---------------- محاسبات و رفرش جدول‌ها ----------------
+        def calc_purchase_total():
+            return sum(r["total_price"] for r in purchase_rows)
+
+        def calc_sale_total():
+            return sum(r["total_price"] for r in sale_rows)
+
+        def update_match_text():
+            p_total = calc_purchase_total()
+            s_total = calc_sale_total()
+            if p_total == 0 and s_total == 0:
+                match_text.value = ""
+                return
+            diff = s_total - p_total
+            if abs(diff) < 0.01:
+                match_text.value = "✅ جمع فاکتور خرید و فروش با هم برابر است."
+                match_text.color = SUCCESS
+            else:
+                match_text.value = f"⚠️ عدم تطابق: اختلاف {logic.fmt(abs(diff))} تومان بین جمع خرید و فروش وجود دارد."
+                match_text.color = DANGER
+
+        def refresh_purchase_table():
+            purchase_table.rows.clear()
+            for idx, r in enumerate(purchase_rows):
+                is_editing_this = editing_purchase_idx[0] == idx
+                purchase_table.rows.append(ft.DataRow(
+                    color=ft.Colors.ORANGE_50 if is_editing_this else None,
+                    cells=[
+                        ft.DataCell(ft.Text(r["name"])),
+                        ft.DataCell(ft.Text(logic.fmt(r["qty"]))),
+                        ft.DataCell(ft.Text(logic.fmt(r["unit_price"]))),
+                        ft.DataCell(ft.Text(logic.fmt(r["total_price"]))),
+                        ft.DataCell(ft.Row([
+                            ft.IconButton(icon=ft.Icons.EDIT, icon_color=ACCENT,
+                                          tooltip="ویرایش این ردیف",
+                                          on_click=lambda e, i=idx: edit_purchase_row_click(i)),
+                            ft.IconButton(icon=ft.Icons.DELETE, icon_color=DANGER,
+                                          tooltip="حذف این ردیف",
+                                          on_click=lambda e, i=idx: remove_purchase_row(i)),
+                        ], spacing=0)),
+                    ]))
+            purchase_total_text.value = f"جمع فاکتور خرید: {logic.fmt(calc_purchase_total())} تومان"
+            update_match_text()
+            page.update()
+
+        def refresh_sale_table():
+            sale_table.rows.clear()
+            for idx, r in enumerate(sale_rows):
+                is_editing_this = editing_sale_idx[0] == idx
+                sale_table.rows.append(ft.DataRow(
+                    color=ft.Colors.ORANGE_50 if is_editing_this else None,
+                    cells=[
+                        ft.DataCell(ft.Text(r["name"])),
+                        ft.DataCell(ft.Text(logic.fmt(r["qty"]))),
+                        ft.DataCell(ft.Text(logic.fmt(r["unit_price"]))),
+                        ft.DataCell(ft.Text(logic.fmt(r["total_price"]))),
+                        ft.DataCell(ft.Row([
+                            ft.IconButton(icon=ft.Icons.EDIT, icon_color=ACCENT,
+                                          tooltip="ویرایش این ردیف",
+                                          on_click=lambda e, i=idx: edit_sale_row_click(i)),
+                            ft.IconButton(icon=ft.Icons.DELETE, icon_color=DANGER,
+                                          tooltip="حذف این ردیف",
+                                          on_click=lambda e, i=idx: remove_sale_row(i)),
+                        ], spacing=0)),
+                    ]))
+            sale_total_text.value = f"جمع فاکتور فروش: {logic.fmt(calc_sale_total())} تومان"
+            update_match_text()
+            page.update()
+
+        # ---------------- افزودن/ویرایش/حذف ردیف فاکتور خرید ----------------
+        def add_purchase_row(e):
+            name = (purchase_item_name.value or "").strip()
+            qty = logic.to_float(purchase_qty.value)
+            unit_price = logic.to_float(purchase_unit_price.value)
+            if not name or qty <= 0 or unit_price <= 0:
+                status_text.value = "⚠️ لطفاً نوع کالا، وزن/تعداد و قیمت واحد معتبر برای فاکتور خرید وارد کنید."
+                status_text.color = DANGER
+                page.update()
+                return
+
+            if editing_purchase_idx[0] is not None:
+                # حالت ویرایش: همان ردیف موجود به‌روزرسانی می‌شود
+                idx = editing_purchase_idx[0]
+                purchase_rows[idx] = {"name": name, "qty": qty, "unit_price": unit_price,
+                                       "total_price": qty * unit_price}
+                editing_purchase_idx[0] = None
+                purchase_add_button.text = "➕ افزودن ردیف به فاکتور خرید"
+                purchase_cancel_edit_button.visible = False
+                status_text.value = "✅ ردیف فاکتور خرید به‌روزرسانی شد."
+                status_text.color = SUCCESS
+            else:
+                # حالت افزودن ردیف جدید
+                purchase_rows.append({"name": name, "qty": qty, "unit_price": unit_price,
+                                       "total_price": qty * unit_price})
+                status_text.value = ""
+
+            purchase_item_name.value = ""
+            purchase_qty.value = ""
+            purchase_unit_price.value = ""
+            refresh_purchase_table()
+
+        def edit_purchase_row_click(idx):
+            r = purchase_rows[idx]
+            purchase_item_name.value = r["name"]
+            purchase_qty.value = str(r["qty"])
+            purchase_unit_price.value = str(r["unit_price"])
+            editing_purchase_idx[0] = idx
+            purchase_add_button.text = "✏️ به‌روزرسانی ردیف فاکتور خرید"
+            purchase_cancel_edit_button.visible = True
+            status_text.value = f"در حال ویرایش ردیف «{r['name']}» از فاکتور خرید هستید."
+            status_text.color = ACCENT_DARK
+            refresh_purchase_table()
+
+        def cancel_purchase_edit(e):
+            editing_purchase_idx[0] = None
+            purchase_item_name.value = ""
+            purchase_qty.value = ""
+            purchase_unit_price.value = ""
+            purchase_add_button.text = "➕ افزودن ردیف به فاکتور خرید"
+            purchase_cancel_edit_button.visible = False
+            status_text.value = ""
+            refresh_purchase_table()
+
+        def remove_purchase_row(idx):
+            if editing_purchase_idx[0] == idx:
+                cancel_purchase_edit(None)
+            purchase_rows.pop(idx)
+            refresh_purchase_table()
+
+        # ---------------- افزودن/ویرایش/حذف ردیف فاکتور فروش ----------------
+        def add_sale_row(e):
+            name = (sale_item_name.value or "").strip()
+            qty = logic.to_float(sale_qty.value)
+            unit_price = logic.to_float(sale_unit_price.value)
+            if not name or qty <= 0 or unit_price <= 0:
+                status_text.value = "⚠️ لطفاً نوع کالا، وزن/تعداد و قیمت واحد معتبر برای فاکتور فروش وارد کنید."
+                status_text.color = DANGER
+                page.update()
+                return
+
+            if editing_sale_idx[0] is not None:
+                # حالت ویرایش: همان ردیف موجود به‌روزرسانی می‌شود
+                idx = editing_sale_idx[0]
+                sale_rows[idx] = {"name": name, "qty": qty, "unit_price": unit_price,
+                                   "total_price": qty * unit_price}
+                editing_sale_idx[0] = None
+                sale_add_button.text = "➕ افزودن ردیف به فاکتور فروش"
+                sale_cancel_edit_button.visible = False
+                status_text.value = "✅ ردیف فاکتور فروش به‌روزرسانی شد."
+                status_text.color = SUCCESS
+            else:
+                # حالت افزودن ردیف جدید
+                sale_rows.append({"name": name, "qty": qty, "unit_price": unit_price,
+                                   "total_price": qty * unit_price})
+                status_text.value = ""
+
+            sale_item_name.value = ""
+            sale_qty.value = ""
+            sale_unit_price.value = ""
+            refresh_sale_table()
+
+        def edit_sale_row_click(idx):
+            r = sale_rows[idx]
+            sale_item_name.value = r["name"]
+            sale_qty.value = str(r["qty"])
+            sale_unit_price.value = str(r["unit_price"])
+            editing_sale_idx[0] = idx
+            sale_add_button.text = "✏️ به‌روزرسانی ردیف فاکتور فروش"
+            sale_cancel_edit_button.visible = True
+            status_text.value = f"در حال ویرایش ردیف «{r['name']}» از فاکتور فروش هستید."
+            status_text.color = ACCENT_DARK
+            refresh_sale_table()
+
+        def cancel_sale_edit(e):
+            editing_sale_idx[0] = None
+            sale_item_name.value = ""
+            sale_qty.value = ""
+            sale_unit_price.value = ""
+            sale_add_button.text = "➕ افزودن ردیف به فاکتور فروش"
+            sale_cancel_edit_button.visible = False
+            status_text.value = ""
+            refresh_sale_table()
+
+        def remove_sale_row(idx):
+            if editing_sale_idx[0] == idx:
+                cancel_sale_edit(None)
+            sale_rows.pop(idx)
+            refresh_sale_table()
+
+        # ---------------- پاک کردن فرم / ترازنامه جدید ----------------
+        def clear_form():
+            editing_id[0] = None
+            editing_purchase_idx[0] = None
+            editing_sale_idx[0] = None
+            purchase_add_button.text = "➕ افزودن ردیف به فاکتور خرید"
+            sale_add_button.text = "➕ افزودن ردیف به فاکتور فروش"
+            purchase_cancel_edit_button.visible = False
+            sale_cancel_edit_button.visible = False
+            purchase_item_name.value = ""
+            purchase_qty.value = ""
+            purchase_unit_price.value = ""
+            sale_item_name.value = ""
+            sale_qty.value = ""
+            sale_unit_price.value = ""
+            sheet_date_field.value = ""
+            purchase_date_field.value = ""
+            sale_date_field.value = ""
+            purchase_rows.clear()
+            sale_rows.clear()
+            for f in (pos1_field, pos2_field, cash_field, card_to_card_field, grand_total_field,
+                      partners_field, municipality_field, tax_field, electricity_field,
+                      gas_field, water_field, custom_field, balance_field, shortage_field):
+                f.value = "0"
+            status_text.value = ""
+            refresh_purchase_table()
+            refresh_sale_table()
+
+        # ---------------- ذخیره ترازنامه ----------------
+        def save_click(e):
+            sheet_date = (sheet_date_field.value or "").strip()
+            if not sheet_date:
+                status_text.value = "⚠️ لطفاً تاریخ کلی ترازنامه را وارد کنید."
+                status_text.color = DANGER
+                page.update()
+                return
+            if not purchase_rows and not sale_rows:
+                status_text.value = "⚠️ حداقل یک ردیف در فاکتور خرید یا فروش وارد کنید."
+                status_text.color = DANGER
+                page.update()
+                return
+
+            purchase_items = [(r["name"], r["qty"], r["unit_price"], r["total_price"]) for r in purchase_rows]
+            sale_items = [(r["name"], r["qty"], r["unit_price"], r["total_price"]) for r in sale_rows]
+            manual = {
+                "pos1": logic.to_float(pos1_field.value),
+                "pos2": logic.to_float(pos2_field.value),
+                "cash": logic.to_float(cash_field.value),
+                "card_to_card": logic.to_float(card_to_card_field.value),
+                "grand_total": logic.to_float(grand_total_field.value),
+                "partners_amount": logic.to_float(partners_field.value),
+                "municipality": logic.to_float(municipality_field.value),
+                "tax": logic.to_float(tax_field.value),
+                "electricity": logic.to_float(electricity_field.value),
+                "gas": logic.to_float(gas_field.value),
+                "water": logic.to_float(water_field.value),
+                "custom_amount": logic.to_float(custom_field.value),
+                "balance": logic.to_float(balance_field.value),
+                "shortage": logic.to_float(shortage_field.value),
+            }
+            new_id = logic.save_balance_sheet(
+                sheet_date, purchase_date_field.value or "", sale_date_field.value or "",
+                purchase_items, sale_items, manual, editing_id[0]
+            )
+            editing_id[0] = new_id
+            was_edit = editing_id[0] is not None
+            status_text.value = f"✅ ترازنامه مالی با موفقیت ذخیره شد (شماره {new_id})."
+            status_text.color = SUCCESS
+            refresh_all()
+            page.update()
+
+        # ---------------- تاریخچه ترازنامه‌ها ----------------
+        history_table = ft.DataTable(
+            columns=[
+                ft.DataColumn(ft.Text("تاریخ")),
+                ft.DataColumn(ft.Text("جمع خرید")),
+                ft.DataColumn(ft.Text("جمع فروش")),
+                ft.DataColumn(ft.Text("جمع کل")),
+                ft.DataColumn(ft.Text("تراز مالی")),
+                ft.DataColumn(ft.Text("کسری اقلام")),
+                ft.DataColumn(ft.Text("عملیات")),
+            ],
+            rows=[],
+        )
+
+        def load_sheet(sheet_id):
+            header, p_items, s_items = logic.get_balance_sheet_full(sheet_id)
+            if not header:
+                return
+            (h_id, sheet_date, purchase_date, sale_date, pos1, pos2, cash, card_to_card,
+             grand_total, partners_amount, municipality, tax, electricity, gas, water,
+             custom_amount, balance, shortage, purchase_total, sale_total, created_at) = header
+
+            editing_id[0] = h_id
+            editing_purchase_idx[0] = None
+            editing_sale_idx[0] = None
+            purchase_add_button.text = "➕ افزودن ردیف به فاکتور خرید"
+            sale_add_button.text = "➕ افزودن ردیف به فاکتور فروش"
+            purchase_cancel_edit_button.visible = False
+            sale_cancel_edit_button.visible = False
+            sheet_date_field.value = sheet_date
+            purchase_date_field.value = purchase_date
+            sale_date_field.value = sale_date
+
+            purchase_rows.clear()
+            for _, name, qty, unit_price, total_price in p_items:
+                purchase_rows.append({"name": name, "qty": qty, "unit_price": unit_price, "total_price": total_price})
+
+            sale_rows.clear()
+            for _, name, qty, unit_price, total_price in s_items:
+                sale_rows.append({"name": name, "qty": qty, "unit_price": unit_price, "total_price": total_price})
+
+            pos1_field.value = str(pos1)
+            pos2_field.value = str(pos2)
+            cash_field.value = str(cash)
+            card_to_card_field.value = str(card_to_card)
+            grand_total_field.value = str(grand_total)
+            partners_field.value = str(partners_amount)
+            municipality_field.value = str(municipality)
+            tax_field.value = str(tax)
+            electricity_field.value = str(electricity)
+            gas_field.value = str(gas)
+            water_field.value = str(water)
+            custom_field.value = str(custom_amount)
+            balance_field.value = str(balance)
+            shortage_field.value = str(shortage)
+
+            status_text.value = f"✏️ در حال ویرایش ترازنامه شماره {h_id}. پس از تغییرات، «ذخیره ترازنامه» را بزنید."
+            status_text.color = ACCENT_DARK
+            refresh_purchase_table()
+            refresh_sale_table()
+            page.update()
+
+        def delete_sheet_click(sheet_id):
+            if editing_id[0] == sheet_id:
+                clear_form()
+            logic.delete_balance_sheet(sheet_id)
+            status_text.value = f"✅ ترازنامه شماره {sheet_id} حذف شد."
+            status_text.color = SUCCESS
+            refresh_all()
+            page.update()
+
+        def refresh_history():
+            history_table.rows.clear()
+            for row in logic.get_all_balance_sheets():
+                (h_id, sheet_date, purchase_date, sale_date, purchase_total, sale_total,
+                 grand_total, balance, shortage, created_at) = row
+                history_table.rows.append(ft.DataRow(cells=[
+                    ft.DataCell(ft.Text(sheet_date)),
+                    ft.DataCell(ft.Text(logic.fmt(purchase_total))),
+                    ft.DataCell(ft.Text(logic.fmt(sale_total))),
+                    ft.DataCell(ft.Text(logic.fmt(grand_total))),
+                    ft.DataCell(ft.Text(logic.fmt(balance))),
+                    ft.DataCell(ft.Text(logic.fmt(shortage))),
+                    ft.DataCell(ft.Row([
+                        ft.IconButton(icon=ft.Icons.EDIT, icon_color=ACCENT, tooltip="بازکردن/ویرایش",
+                                      on_click=lambda e, sid=h_id: load_sheet(sid)),
+                        ft.IconButton(icon=ft.Icons.DELETE, icon_color=DANGER, tooltip="حذف",
+                                      on_click=lambda e, sid=h_id: delete_sheet_click(sid)),
+                    ], spacing=0)),
+                ]))
+
+        refreshers.append(refresh_history)
+
+        # ---------------- چیدمان نهایی ----------------
+        purchase_add_button = ft.ElevatedButton("➕ افزودن ردیف به فاکتور خرید", on_click=add_purchase_row,
+                                                 bgcolor=ACCENT, color=ft.Colors.WHITE)
+        purchase_cancel_edit_button = ft.OutlinedButton("✖️ لغو ویرایش ردیف", on_click=cancel_purchase_edit,
+                                                         visible=False)
+
+        sale_add_button = ft.ElevatedButton("➕ افزودن ردیف به فاکتور فروش", on_click=add_sale_row,
+                                             bgcolor=ACCENT, color=ft.Colors.WHITE)
+        sale_cancel_edit_button = ft.OutlinedButton("✖️ لغو ویرایش ردیف", on_click=cancel_sale_edit,
+                                                     visible=False)
+
+        purchase_card = card(ft.Column([
+            section_title("🧾 فاکتور خرید"),
+            ft.Divider(),
+            purchase_date_field,
+            ft.Row([purchase_item_name, purchase_qty, purchase_unit_price], wrap=True),
+            ft.Row([purchase_add_button, purchase_cancel_edit_button], wrap=True),
+            ft.Row([purchase_table], scroll=ft.ScrollMode.AUTO),
+            purchase_total_text,
+        ], spacing=10))
+
+        sale_card = card(ft.Column([
+            section_title("🧾 فاکتور فروش"),
+            ft.Divider(),
+            sale_date_field,
+            ft.Row([sale_item_name, sale_qty, sale_unit_price], wrap=True),
+            ft.Row([sale_add_button, sale_cancel_edit_button], wrap=True),
+            ft.Row([sale_table], scroll=ft.ScrollMode.AUTO),
+            sale_total_text,
+        ], spacing=10))
+
+        manual_card = card(ft.Column([
+            section_title("✍️ اقلام دستی ترازنامه"),
+            ft.Divider(),
+            ft.Row([pos1_field, pos2_field], wrap=True),
+            ft.Row([cash_field, card_to_card_field], wrap=True),
+            ft.Row([grand_total_field, partners_field], wrap=True),
+            ft.Row([municipality_field, tax_field], wrap=True),
+            ft.Row([electricity_field, gas_field], wrap=True),
+            ft.Row([water_field, custom_field], wrap=True),
+            ft.Row([balance_field, shortage_field], wrap=True),
+        ], spacing=10))
+
+        save_card = card(ft.Column([
+            section_title("🧮 ترازنامه مالی"),
+            ft.Divider(),
+            sheet_date_field,
+            match_text,
+            ft.Row([
+                ft.ElevatedButton("💾 ذخیره ترازنامه", on_click=save_click,
+                                   bgcolor=ACCENT, color=ft.Colors.WHITE),
+                ft.OutlinedButton("🆕 ترازنامه جدید / پاک کردن فرم",
+                                   on_click=lambda e: (clear_form(), page.update())),
+            ]),
+            status_text,
+        ], spacing=10))
+
+        history_card = card(ft.Column([
+            section_title("📜 تاریخچه ترازنامه‌های ثبت‌شده"),
+            ft.Divider(),
+            ft.Row([history_table], scroll=ft.ScrollMode.AUTO),
+        ], spacing=10))
+
+        refresh_history()
+        refresh_purchase_table()
+        refresh_sale_table()
+
+        return ft.Column([
+            save_card,
+            ft.Row([purchase_card, sale_card], spacing=16),
+            manual_card,
+            history_card,
+        ], spacing=16, scroll=ft.ScrollMode.AUTO, expand=True)
+
+    # ============================================================
     # ساخت تب‌ها و چیدمان نهایی صفحه
     # ============================================================
     tab_labels = [
-        "🛒 فروش", "📦 انبار", "🍳 رسپی", "💡 قیمت‌گذاری", "📊 گزارش", "📈 داشبورد",
+        "🛒 فروش", "📦 انبار", "🍳 رسپی", "💡 قیمت‌گذاری", "📊 گزارش", "📈 داشبورد", "🧮 ترازنامه مالی",
     ]
     tab_builders = [
         build_sales_tab, build_ingredients_tab, build_dish_tab,
-        build_smart_pricing_tab, build_report_tab, build_analytics_tab,
+        build_smart_pricing_tab, build_report_tab, build_analytics_tab, build_balance_tab,
     ]
 
     tabs = ft.Tabs(
