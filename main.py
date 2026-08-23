@@ -721,13 +721,13 @@ def main(page: ft.Page):
         editing_id = [None]  # وقتی مقدار دارد یعنی در حالت ویرایش یک ترازنامه قبلی هستیم
 
         # ---- تاریخ کلی ترازنامه ----
-        sheet_date_field = ft.TextField(label="تاریخ کلی ترازنامه (مثلاً 1403/05/12)", width=300)
+        sheet_date_field = ft.TextField(label="تاریخ کلی ترازنامه (مثلاً 1403/05/12)")
 
         # ---- فاکتور خرید ----
-        purchase_date_field = ft.TextField(label="روز و تاریخ فاکتور خرید", width=260)
-        purchase_item_name = ft.TextField(label="نوع کالا", width=200)
-        purchase_qty = ft.TextField(label="وزن/تعداد", width=120, keyboard_type=ft.KeyboardType.NUMBER)
-        purchase_unit_price = ft.TextField(label="قیمت واحد", width=140, keyboard_type=ft.KeyboardType.NUMBER)
+        purchase_date_field = ft.TextField(label="روز و تاریخ فاکتور خرید")
+        purchase_item_name = ft.TextField(label="نوع کالا", col={"xs": 12, "sm": 6, "md": 4})
+        purchase_qty = ft.TextField(label="وزن/تعداد", col={"xs": 12, "sm": 6, "md": 4}, keyboard_type=ft.KeyboardType.NUMBER)
+        purchase_unit_price = ft.TextField(label="قیمت واحد", col={"xs": 12, "sm": 12, "md": 4}, keyboard_type=ft.KeyboardType.NUMBER)
         purchase_rows = []  # هر آیتم: {"name","qty","unit_price","total_price"}
         editing_purchase_idx = [None]  # اندیس ردیفی از فاکتور خرید که در حال ویرایش است (None یعنی حالت افزودن)
         purchase_table = ft.DataTable(
@@ -743,10 +743,10 @@ def main(page: ft.Page):
         purchase_total_text = ft.Text("جمع فاکتور خرید: 0 تومان", size=14, weight=ft.FontWeight.BOLD, color=ACCENT_DARK)
 
         # ---- فاکتور فروش ----
-        sale_date_field = ft.TextField(label="روز و تاریخ فاکتور فروش", width=260)
-        sale_item_name = ft.TextField(label="نوع کالا", width=200)
-        sale_qty = ft.TextField(label="وزن/تعداد", width=120, keyboard_type=ft.KeyboardType.NUMBER)
-        sale_unit_price = ft.TextField(label="قیمت واحد", width=140, keyboard_type=ft.KeyboardType.NUMBER)
+        sale_date_field = ft.TextField(label="روز و تاریخ فاکتور فروش")
+        sale_item_name = ft.TextField(label="نوع کالا", col={"xs": 12, "sm": 6, "md": 4})
+        sale_qty = ft.TextField(label="وزن/تعداد", col={"xs": 12, "sm": 6, "md": 4}, keyboard_type=ft.KeyboardType.NUMBER)
+        sale_unit_price = ft.TextField(label="قیمت واحد", col={"xs": 12, "sm": 12, "md": 4}, keyboard_type=ft.KeyboardType.NUMBER)
         sale_rows = []
         editing_sale_idx = [None]  # اندیس ردیفی از فاکتور فروش که در حال ویرایش است (None یعنی حالت افزودن)
         sale_table = ft.DataTable(
@@ -764,20 +764,20 @@ def main(page: ft.Page):
         match_text = ft.Text("", size=13)
 
         # ---- اقلام دستی ----
-        pos1_field = ft.TextField(label="جمع واریزی کارتخوان ۱", width=260, value="0", keyboard_type=ft.KeyboardType.NUMBER)
-        pos2_field = ft.TextField(label="جمع واریزی کارتخوان ۲", width=260, value="0", keyboard_type=ft.KeyboardType.NUMBER)
-        cash_field = ft.TextField(label="نقدی", width=260, value="0", keyboard_type=ft.KeyboardType.NUMBER)
-        card_to_card_field = ft.TextField(label="کارت به کارت", width=260, value="0", keyboard_type=ft.KeyboardType.NUMBER)
-        grand_total_field = ft.TextField(label="جمع کل", width=260, value="0", keyboard_type=ft.KeyboardType.NUMBER)
-        partners_field = ft.TextField(label="مبلغ پایا شده شرکا", width=260, value="0", keyboard_type=ft.KeyboardType.NUMBER)
-        municipality_field = ft.TextField(label="شهرداری", width=260, value="0", keyboard_type=ft.KeyboardType.NUMBER)
-        tax_field = ft.TextField(label="دارایی", width=260, value="0", keyboard_type=ft.KeyboardType.NUMBER)
-        electricity_field = ft.TextField(label="برق", width=260, value="0", keyboard_type=ft.KeyboardType.NUMBER)
-        gas_field = ft.TextField(label="گاز", width=260, value="0", keyboard_type=ft.KeyboardType.NUMBER)
-        water_field = ft.TextField(label="آب", width=260, value="0", keyboard_type=ft.KeyboardType.NUMBER)
-        custom_field = ft.TextField(label="مبلغ دلخواه", width=260, value="0", keyboard_type=ft.KeyboardType.NUMBER)
-        balance_field = ft.TextField(label="تراز مالی", width=260, value="0", keyboard_type=ft.KeyboardType.NUMBER)
-        shortage_field = ft.TextField(label="کسری اقلام", width=260, value="0", keyboard_type=ft.KeyboardType.NUMBER)
+        pos1_field = ft.TextField(label="جمع واریزی کارتخوان ۱", col={"xs": 12, "sm": 6, "md": 4}, value="0", keyboard_type=ft.KeyboardType.NUMBER)
+        pos2_field = ft.TextField(label="جمع واریزی کارتخوان ۲", col={"xs": 12, "sm": 6, "md": 4}, value="0", keyboard_type=ft.KeyboardType.NUMBER)
+        cash_field = ft.TextField(label="نقدی", col={"xs": 12, "sm": 6, "md": 4}, value="0", keyboard_type=ft.KeyboardType.NUMBER)
+        card_to_card_field = ft.TextField(label="کارت به کارت", col={"xs": 12, "sm": 6, "md": 4}, value="0", keyboard_type=ft.KeyboardType.NUMBER)
+        grand_total_field = ft.TextField(label="جمع کل", col={"xs": 12, "sm": 6, "md": 4}, value="0", keyboard_type=ft.KeyboardType.NUMBER)
+        partners_field = ft.TextField(label="مبلغ پایا شده شرکا", col={"xs": 12, "sm": 6, "md": 4}, value="0", keyboard_type=ft.KeyboardType.NUMBER)
+        municipality_field = ft.TextField(label="شهرداری", col={"xs": 12, "sm": 6, "md": 4}, value="0", keyboard_type=ft.KeyboardType.NUMBER)
+        tax_field = ft.TextField(label="دارایی", col={"xs": 12, "sm": 6, "md": 4}, value="0", keyboard_type=ft.KeyboardType.NUMBER)
+        electricity_field = ft.TextField(label="برق", col={"xs": 12, "sm": 6, "md": 4}, value="0", keyboard_type=ft.KeyboardType.NUMBER)
+        gas_field = ft.TextField(label="گاز", col={"xs": 12, "sm": 6, "md": 4}, value="0", keyboard_type=ft.KeyboardType.NUMBER)
+        water_field = ft.TextField(label="آب", col={"xs": 12, "sm": 6, "md": 4}, value="0", keyboard_type=ft.KeyboardType.NUMBER)
+        custom_field = ft.TextField(label="مبلغ دلخواه", col={"xs": 12, "sm": 6, "md": 4}, value="0", keyboard_type=ft.KeyboardType.NUMBER)
+        balance_field = ft.TextField(label="تراز مالی", col={"xs": 12, "sm": 6, "md": 4}, value="0", keyboard_type=ft.KeyboardType.NUMBER)
+        shortage_field = ft.TextField(label="کسری اقلام", col={"xs": 12, "sm": 6, "md": 4}, value="0", keyboard_type=ft.KeyboardType.NUMBER)
 
         status_text = ft.Text("", size=13)
 
@@ -1149,7 +1149,7 @@ def main(page: ft.Page):
             section_title("🧾 فاکتور خرید"),
             ft.Divider(),
             purchase_date_field,
-            ft.Row([purchase_item_name, purchase_qty, purchase_unit_price], wrap=True),
+            ft.ResponsiveRow([purchase_item_name, purchase_qty, purchase_unit_price]),
             ft.Row([purchase_add_button, purchase_cancel_edit_button], wrap=True),
             ft.Row([purchase_table], scroll=ft.ScrollMode.AUTO),
             purchase_total_text,
@@ -1159,7 +1159,7 @@ def main(page: ft.Page):
             section_title("🧾 فاکتور فروش"),
             ft.Divider(),
             sale_date_field,
-            ft.Row([sale_item_name, sale_qty, sale_unit_price], wrap=True),
+            ft.ResponsiveRow([sale_item_name, sale_qty, sale_unit_price]),
             ft.Row([sale_add_button, sale_cancel_edit_button], wrap=True),
             ft.Row([sale_table], scroll=ft.ScrollMode.AUTO),
             sale_total_text,
@@ -1168,13 +1168,11 @@ def main(page: ft.Page):
         manual_card = card(ft.Column([
             section_title("✍️ اقلام دستی ترازنامه"),
             ft.Divider(),
-            ft.Row([pos1_field, pos2_field], wrap=True),
-            ft.Row([cash_field, card_to_card_field], wrap=True),
-            ft.Row([grand_total_field, partners_field], wrap=True),
-            ft.Row([municipality_field, tax_field], wrap=True),
-            ft.Row([electricity_field, gas_field], wrap=True),
-            ft.Row([water_field, custom_field], wrap=True),
-            ft.Row([balance_field, shortage_field], wrap=True),
+            ft.ResponsiveRow([
+                pos1_field, pos2_field, cash_field, card_to_card_field, grand_total_field,
+                partners_field, municipality_field, tax_field, electricity_field,
+                gas_field, water_field, custom_field, balance_field, shortage_field,
+            ]),
         ], spacing=10))
 
         save_card = card(ft.Column([
@@ -1203,7 +1201,8 @@ def main(page: ft.Page):
 
         return ft.Column([
             save_card,
-            ft.Row([purchase_card, sale_card], spacing=16),
+            purchase_card,
+            sale_card,
             manual_card,
             history_card,
         ], spacing=16, scroll=ft.ScrollMode.AUTO, expand=True)
