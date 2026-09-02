@@ -96,6 +96,15 @@ def init_db():
         created_at TEXT NOT NULL
     )""")
 
+    c.execute("""CREATE TABLE IF NOT EXISTS stock_adjustments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ingredient_id INTEGER NOT NULL,
+        change_amount REAL NOT NULL,
+        reason TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(ingredient_id) REFERENCES ingredients(id) ON DELETE CASCADE
+    )""")
+
     c.execute("""CREATE TABLE IF NOT EXISTS purchase_invoice_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         balance_sheet_id INTEGER NOT NULL,
@@ -285,6 +294,78 @@ def delete_dish(dish_id):
     c.execute("DELETE FROM dishes WHERE id=?", (dish_id,))
     conn.commit()
     conn.close()
+
+
+# ---- کسر / افزایش دستی موجودی انبار ----
+def deduct_ingredient_stock(ingredient_id, amount, reason=""):
+    """
+    کسر دستی مقدار «amount» از موجودی یک کالا (مثلاً ضایعات، مصرف داخلی، اشتباه شمارش و ...).
+    amount باید عددی مثبت باشد. اگر موجودی کافی نباشد، خطا برمی‌گرداند و چیزی کسر نمی‌شود.
+    خروجی: (True, "پیام موفقیت") یا (False, "پیام خطا")
+    """
+    if amount <= 0:
+        return False, "مقدار کسر باید بزرگ‌تر از صفر باشد."
+
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT name, unit, stock FROM ingredients WHERE id=?", (ingredient_id,))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        return False, "کالای مورد نظر پیدا نشد."
+
+    name, unit, curr_stock = row
+    if curr_stock < amount:
+        conn.close()
+        return False, f"موجودی کافی نیست. موجودی فعلی «{name}»: {curr_stock} {unit}"
+
+    ts = now_str()
+    new_stock = curr_stock - amount
+    c.execute("UPDATE ingredients SET stock=?, updated_at=? WHERE id=?", (new_stock, ts, ingredient_id))
+    c.execute("INSERT INTO stock_adjustments (ingredient_id, change_amount, reason, created_at) VALUES (?,?,?,?)",
+               (ingredient_id, -amount, reason, ts))
+    conn.commit()
+    conn.close()
+    return True, f"{amount} {unit} از «{name}» کسر شد. موجودی جدید: {new_stock} {unit}"
+
+
+def add_ingredient_stock(ingredient_id, amount, reason=""):
+    """
+    افزایش دستی موجودی یک کالا (مثلاً ورود کالای جدید به انبار).
+    amount باید عددی مثبت باشد.
+    خروجی: (True, "پیام موفقیت") یا (False, "پیام خطا")
+    """
+    if amount <= 0:
+        return False, "مقدار افزایش باید بزرگ‌تر از صفر باشد."
+
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT name, unit, stock FROM ingredients WHERE id=?", (ingredient_id,))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        return False, "کالای مورد نظر پیدا نشد."
+
+    name, unit, curr_stock = row
+    ts = now_str()
+    new_stock = curr_stock + amount
+    c.execute("UPDATE ingredients SET stock=?, updated_at=? WHERE id=?", (new_stock, ts, ingredient_id))
+    c.execute("INSERT INTO stock_adjustments (ingredient_id, change_amount, reason, created_at) VALUES (?,?,?,?)",
+               (ingredient_id, amount, reason, ts))
+    conn.commit()
+    conn.close()
+    return True, f"{amount} {unit} به «{name}» اضافه شد. موجودی جدید: {new_stock} {unit}"
+
+
+def get_stock_adjustments(ingredient_id, limit=20):
+    """آخرین تغییرات دستی موجودی یک کالا (برای نمایش تاریخچه)."""
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("""SELECT change_amount, reason, created_at FROM stock_adjustments
+                 WHERE ingredient_id=? ORDER BY id DESC LIMIT ?""", (ingredient_id, limit))
+    rows = c.fetchall()
+    conn.close()
+    return rows
 
 
 # ---- توابع فروش و انبارداری ----

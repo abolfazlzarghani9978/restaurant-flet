@@ -154,6 +154,49 @@ def main(page: ft.Page):
             status_text.color = SUCCESS if ok else DANGER
             refresh_all()
 
+        def open_stock_dialog(item, mode):
+            """
+            پنجره سریع کسر/افزودن مقدار مشخص از موجودی یک کالا، بدون نیاز به ویرایش کامل رکورد.
+            mode: 'deduct' برای کسر (مثلاً ضایعات یا مصرف)، 'add' برای افزایش (مثلاً ورود کالا).
+            """
+            ing_id, name, unit, price, stock, min_stock, updated = item
+            amount_field = ft.TextField(label=f"مقدار ({unit})", autofocus=True,
+                                          keyboard_type=ft.KeyboardType.NUMBER, width=280)
+            reason_field = ft.TextField(label="دلیل / توضیح (اختیاری)", width=280)
+            info_text = ft.Text(f"موجودی فعلی: {logic.fmt(stock)} {unit}", size=12, color=ft.Colors.GREY_700)
+
+            def do_cancel(e):
+                page.pop_dialog()
+
+            def do_confirm(e):
+                amount = logic.to_float(amount_field.value)
+                reason = (reason_field.value or "").strip()
+                if mode == "deduct":
+                    ok, msg = logic.deduct_ingredient_stock(ing_id, amount, reason)
+                else:
+                    ok, msg = logic.add_ingredient_stock(ing_id, amount, reason)
+                if ok:
+                    page.pop_dialog()
+                    status_text.value = "✅ " + msg
+                    status_text.color = SUCCESS
+                    refresh_all()
+                else:
+                    info_text.value = "❌ " + msg
+                    info_text.color = DANGER
+                    page.update()
+
+            dialog = ft.AlertDialog(
+                modal=True,
+                title=ft.Text(("➖ کسر از انبار — " if mode == "deduct" else "➕ افزودن به انبار — ") + name),
+                content=ft.Column([info_text, amount_field, reason_field], tight=True, spacing=10),
+                actions=[
+                    ft.TextButton("انصراف", on_click=do_cancel),
+                    ft.ElevatedButton("تایید و به‌روزرسانی", on_click=do_confirm,
+                                       bgcolor=ACCENT, color=ft.Colors.WHITE),
+                ],
+            )
+            page.show_dialog(dialog)
+
         def render_table():
             data_table.rows.clear()
             query = (search_field.value or "").strip().lower()
@@ -171,6 +214,12 @@ def main(page: ft.Page):
                                              weight=ft.FontWeight.BOLD if low_stock else None)),
                         ft.DataCell(ft.Text(str(min_stock))),
                         ft.DataCell(ft.Row([
+                            ft.IconButton(icon=ft.Icons.REMOVE_CIRCLE_OUTLINE, icon_color=DANGER,
+                                          tooltip="کسر از انبار",
+                                          on_click=lambda e, it=item: open_stock_dialog(it, "deduct")),
+                            ft.IconButton(icon=ft.Icons.ADD_CIRCLE_OUTLINE, icon_color=SUCCESS,
+                                          tooltip="افزودن به انبار",
+                                          on_click=lambda e, it=item: open_stock_dialog(it, "add")),
                             ft.IconButton(icon=ft.Icons.EDIT, icon_color=ACCENT,
                                           tooltip="ویرایش",
                                           on_click=lambda e, it=item: edit_ingredient_click(it)),
