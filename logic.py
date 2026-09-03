@@ -139,6 +139,10 @@ def add_or_update_ingredient(name, unit, price, stock, min_stock, ingredient_id=
     ذخیره یا ویرایش کالا.
     اگر ingredient_id داده شود، همان رکورد (با هر نامی، حتی نام جدید) آپدیت می‌شود [ویرایش واقعی/rename].
     اگر ingredient_id داده نشود، طبق رفتار قبلی بر اساس نام یکتا درج/به‌روزرسانی می‌شود.
+    
+    اصلاح شده: اگر کالایی با همین نام وجود داشته باشد، موجودی جدید به موجودی قبلی اضافه می‌شود
+    (جمع می‌شود) نه اینکه جایگزین شود.
+    
     خروجی: (True, "") در صورت موفقیت یا (False, "پیام خطا") در صورت تکراری بودن نام.
     """
     conn = get_conn()
@@ -146,28 +150,35 @@ def add_or_update_ingredient(name, unit, price, stock, min_stock, ingredient_id=
     ts = now_str()
     try:
         if ingredient_id:
-            c.execute("SELECT price FROM ingredients WHERE id=?", (ingredient_id,))
+            # حالت ویرایش با شناسه
+            c.execute("SELECT price, stock FROM ingredients WHERE id=?", (ingredient_id,))
             row = c.fetchone()
             if not row:
                 conn.close()
                 return False, "کالای مورد نظر برای ویرایش پیدا نشد."
-            old_price = row[0]
+            old_price, old_stock = row
+            
+            # در حالت ویرایش، موجودی جدید جایگزین موجودی قبلی می‌شود (نه جمع)
             c.execute("""UPDATE ingredients SET name=?, unit=?, price=?, stock=?, min_stock=?, updated_at=?
                          WHERE id=?""", (name, unit, price, stock, min_stock, ts, ingredient_id))
             if float(old_price) != float(price):
                 c.execute("INSERT INTO price_history (ingredient_id, price, changed_at) VALUES (?,?,?)",
                            (ingredient_id, price, ts))
         else:
-            c.execute("SELECT id, price FROM ingredients WHERE name=?", (name,))
+            # حالت افزودن کالای جدید (بدون شناسه)
+            c.execute("SELECT id, price, stock FROM ingredients WHERE name=?", (name,))
             row = c.fetchone()
             if row:
-                ing_id, old_price = row
+                # کالا وجود دارد - موجودی جدید را به موجودی قبلی اضافه می‌کنیم
+                ing_id, old_price, old_stock = row
+                new_stock = old_stock + stock  # جمع موجودی جدید با قبلی
                 c.execute("""UPDATE ingredients SET unit=?, price=?, stock=?, min_stock=?, updated_at=?
-                             WHERE id=?""", (unit, price, stock, min_stock, ts, ing_id))
+                             WHERE id=?""", (unit, price, new_stock, min_stock, ts, ing_id))
                 if float(old_price) != float(price):
                     c.execute("INSERT INTO price_history (ingredient_id, price, changed_at) VALUES (?,?,?)",
                                (ing_id, price, ts))
             else:
+                # کالای جدید - درج مستقیم
                 c.execute("""INSERT INTO ingredients (name, unit, price, stock, min_stock, updated_at)
                              VALUES (?,?,?,?,?,?)""", (name, unit, price, stock, min_stock, ts))
                 ing_id = c.lastrowid
@@ -373,12 +384,25 @@ def process_sale(dish_id, qty, is_takeout):
     conn = get_conn()
     c = conn.cursor()
     dish, ingredients = get_dish_full(dish_id)
+    
+    # بررسی اینکه غذا مواد اولیه دارد یا نه
+    if not dish:
+        conn.close()
+        return False, "غذا پیدا نشد!"
+    
+    if not ingredients:
+        conn.close()
+        return False, "این غذا مواد اولیه ثبت‌شده ندارد! لطفاً ابتدا رسپی غذا را تکمیل کنید."
 
     insufficient = []
     for ing_id, name, unit, price, amount in ingredients:
         required = amount * qty
         c.execute("SELECT stock FROM ingredients WHERE id=?", (ing_id,))
-        curr_stock = c.fetchone()[0]
+        row = c.fetchone()
+        if not row:
+            insufficient.append(f"{name} (کالا در انبار موجود نیست)")
+            continue
+        curr_stock = row[0]
         if curr_stock < required:
             insufficient.append(f"{name} (نیاز: {required} {unit} | موجودی: {curr_stock} {unit})")
 
